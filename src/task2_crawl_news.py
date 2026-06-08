@@ -13,8 +13,13 @@ Cài đặt:
 
 import asyncio
 import json
+import sys
 from datetime import datetime
 from pathlib import Path
+
+# Console Windows mặc định dùng cp1252 → không in được ký tự ✓/✗/tiếng Việt.
+# Ép stdout sang UTF-8 để tránh UnicodeEncodeError.
+sys.stdout.reconfigure(encoding="utf-8")
 
 DATA_DIR = Path(__file__).parent.parent / "data" / "landing" / "news"
 
@@ -24,18 +29,22 @@ def setup_directory():
     DATA_DIR.mkdir(parents=True, exist_ok=True)
 
 
-# TODO: Điền danh sách URL bài báo cần crawl
 ARTICLE_URLS = [
-    # Ví dụ:
-    # "https://vnexpress.net/...",
-    # "https://tuoitre.vn/...",
-    # "https://thanhnien.vn/...",
+    "https://tuoitre.vn/bat-nguoi-mau-an-tay-ca-si-chi-dan-co-tien-truc-phuong-do-lien-quan-ma-tuy-20241114114826655.htm",
+    "https://dantri.com.vn/phap-luat/khoi-to-bat-giam-nguoi-mau-andrea-aybar-ca-si-chi-dan-20241114115057035.htm",
+    "https://vnexpress.net/ca-si-miu-le-bi-bat-voi-cao-buoc-to-chuc-su-dung-ma-tuy-5074769.html",
+    "https://tuoitre.vn/khoi-to-3-bi-can-trong-vu-ca-si-miu-le-su-dung-ma-tuy-o-cat-ba-20260514230349573.htm",
+    "https://tuoitre.vn/bat-ca-si-long-nhat-va-ca-si-son-ngoc-minh-vi-lien-quan-ma-tuy-20260520082138943.htm",
 ]
 
 
-async def crawl_article(url: str) -> dict:
+async def crawl_article(crawler, url: str) -> dict:
     """
     Crawl một bài báo và trả về dict chứa metadata + content.
+
+    Args:
+        crawler: instance AsyncWebCrawler đang mở (tái sử dụng cho mọi URL).
+        url: địa chỉ bài báo cần crawl.
 
     Returns:
         {
@@ -44,34 +53,63 @@ async def crawl_article(url: str) -> dict:
             "date_crawled": str (ISO format),
             "content_markdown": str
         }
-    """
-    from crawl4ai import AsyncWebCrawler
 
-    # TODO: Implement crawling logic
-    # async with AsyncWebCrawler() as crawler:
-    #     result = await crawler.arun(url=url)
-    #     return {
-    #         "url": url,
-    #         "title": result.metadata.get("title", "Unknown"),
-    #         "date_crawled": datetime.now().isoformat(),
-    #         "content_markdown": result.markdown,
-    #     }
-    raise NotImplementedError("Implement crawl_article")
+    Raises:
+        RuntimeError: khi crawl thất bại (trang lỗi, bị chặn, timeout...).
+    """
+    result = await crawler.arun(url=url)
+
+    if not result.success:
+        raise RuntimeError(result.error_message or "Crawl thất bại (không rõ lý do)")
+
+    metadata = result.metadata or {}
+    # crawl4ai trả về markdown có thể là str hoặc object (MarkdownGenerationResult)
+    markdown = getattr(result.markdown, "raw_markdown", result.markdown) or ""
+
+    return {
+        "url": url,
+        "title": metadata.get("title", "Unknown"),
+        "date_crawled": datetime.now().isoformat(),
+        "content_markdown": markdown,
+    }
 
 
 async def crawl_all():
     """Crawl toàn bộ bài báo trong ARTICLE_URLS."""
+    from crawl4ai import AsyncWebCrawler
+
     setup_directory()
 
-    for i, url in enumerate(ARTICLE_URLS, 1):
-        print(f"[{i}/{len(ARTICLE_URLS)}] Crawling: {url}")
-        article = await crawl_article(url)
+    success_count = 0
+    failed: list[tuple[str, str]] = []
 
-        # Lưu file JSON
-        filename = f"article_{i:02d}.json"
-        filepath = DATA_DIR / filename
-        filepath.write_text(json.dumps(article, ensure_ascii=False, indent=2))
-        print(f"  ✓ Saved: {filepath}")
+    # Mở crawler 1 lần và tái sử dụng cho toàn bộ URL (nhanh & tiết kiệm tài nguyên)
+    async with AsyncWebCrawler() as crawler:
+        for i, url in enumerate(ARTICLE_URLS, 1):
+            print(f"[{i}/{len(ARTICLE_URLS)}] Crawling: {url}")
+            try:
+                article = await crawl_article(crawler, url)
+
+                # Lưu file JSON
+                filename = f"article_{i:02d}.json"
+                filepath = DATA_DIR / filename
+                filepath.write_text(
+                    json.dumps(article, ensure_ascii=False, indent=2),
+                    encoding="utf-8",
+                )
+                success_count += 1
+                print(f"  ✓ Saved: {filepath}")
+            except Exception as exc:  # noqa: BLE001 - log mọi lỗi, không dừng cả batch
+                failed.append((url, str(exc)))
+                print(f"  ✗ Lỗi: {exc}")
+
+    # Tổng kết
+    print("\n" + "=" * 50)
+    print(f"Hoàn tất: {success_count}/{len(ARTICLE_URLS)} bài crawl thành công.")
+    if failed:
+        print(f"Thất bại ({len(failed)}):")
+        for url, err in failed:
+            print(f"  - {url}\n    → {err}")
 
 
 if __name__ == "__main__":
