@@ -26,7 +26,7 @@ def generate_response(query: str, chunks: list, history: list, placeholder) -> s
         "2. CITATIONS: You must include precise inline citations for every factual claim you make. "
         "Use the format [1], [2], etc., corresponding to the 'Source N' provided in the context. Do not output a list of references at the end, just the inline citations.\n"
         "3. PROFESSIONALISM: Use clear, formal, and objective language suitable for legal advice.\n"
-        "4. LANGUAGE ALIGNMENT: Always respond in the same language as the user's query."
+        "4. OUTPUT LANGUAGE: You MUST ALWAYS generate your final response in Vietnamese (Tiếng Việt), regardless of the language of the question or context."
     )
     
     messages = [{"role": "system", "content": system_prompt}]
