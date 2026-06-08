@@ -9,6 +9,15 @@ Yêu cầu:
     - Phải tương thích với embedding model và vector store ở Task 4
 """
 
+import json
+from pathlib import Path
+
+import numpy as np
+from sentence_transformers import SentenceTransformer
+
+INDEX_PATH = Path(__file__).parent.parent / "data" / "vectorstore" / "task4_index.json"
+EMBEDDING_MODEL = "BAAI/bge-m3"
+
 
 def semantic_search(query: str, top_k: int = 10) -> list[dict]:
     """
@@ -26,37 +35,45 @@ def semantic_search(query: str, top_k: int = 10) -> list[dict]:
         }
         Sorted by score descending.
     """
-    # TODO: Implement semantic search
-    #
-    # Bước 1: Embed query bằng cùng model ở Task 4
-    # Bước 2: Query vector store (cosine similarity)
-    # Bước 3: Return top_k results
-    #
-    # Ví dụ với Weaviate:
-    # import weaviate
-    # from sentence_transformers import SentenceTransformer
-    #
-    # model = SentenceTransformer("BAAI/bge-m3")
-    # query_embedding = model.encode(query).tolist()
-    #
-    # client = weaviate.connect_to_local()
-    # collection = client.collections.get("DrugLawDocs")
-    #
-    # results = collection.query.near_vector(
-    #     near_vector=query_embedding,
-    #     limit=top_k,
-    #     return_metadata=MetadataQuery(distance=True)
-    # )
-    #
-    # return [
-    #     {
-    #         "content": obj.properties["content"],
-    #         "score": 1 - obj.metadata.distance,  # distance → similarity
-    #         "metadata": {"source": obj.properties["source"], ...}
-    #     }
-    #     for obj in results.objects
-    # ]
-    raise NotImplementedError("Implement semantic_search")
+    if not INDEX_PATH.exists():
+        raise FileNotFoundError(
+            f"Không tìm thấy index tại {INDEX_PATH}. Hãy chạy Task 4 trước."
+        )
+
+    payload = json.loads(INDEX_PATH.read_text(encoding="utf-8"))
+    chunks = payload.get("chunks", [])
+    if not chunks:
+        return []
+
+    model = SentenceTransformer(EMBEDDING_MODEL)
+    query_embedding = model.encode([query], normalize_embeddings=True)[0]
+    query_embedding = np.asarray(query_embedding, dtype=np.float32)
+
+    chunk_embeddings = np.asarray(
+        [chunk["embedding"] for chunk in chunks], dtype=np.float32
+    )
+
+    # Vì embedding đã được normalize, cosine similarity = dot product.
+    scores = chunk_embeddings @ query_embedding
+
+    top_indices = np.argsort(scores)[::-1][:top_k]
+
+    results: list[dict] = []
+    for idx in top_indices:
+        score = float(scores[idx])
+        if score <= 0:
+            continue
+
+        chunk = chunks[int(idx)]
+        results.append(
+            {
+                "content": chunk["content"],
+                "score": score,
+                "metadata": chunk.get("metadata", {}),
+            }
+        )
+
+    return results
 
 
 if __name__ == "__main__":

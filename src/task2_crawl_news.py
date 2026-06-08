@@ -26,10 +26,11 @@ def setup_directory():
 
 # TODO: Điền danh sách URL bài báo cần crawl
 ARTICLE_URLS = [
-    # Ví dụ:
-    # "https://vnexpress.net/...",
-    # "https://tuoitre.vn/...",
-    # "https://thanhnien.vn/...",
+    "https://vietnamnet.vn/ca-si-miu-le-duong-tinh-voi-ma-tuy-bi-bat-giu-o-hai-phong-2514728.html",
+    "https://tuoitre.vn/ca-si-long-nhat-va-son-ngoc-minh-mua-ma-tuy-tu-dau-20260522101239371.htm",
+    "https://baovanhoa.vn/giai-tri/ma-tuy-va-nhung-cu-nga-ngua-cua-showbiz-viet-230477.html",
+    "https://kenh14.vn/loat-sao-viet-vuong-vong-lao-ly-vi-ma-tuy-nguoi-mat-su-nghiep-ke-linh-an-hang-chuc-nam-tu-215260511192134183.chn",
+    "https://nld.com.vn/tu-on-ao-miu-le-nhung-vu-be-boi-ma-tuy-gay-soc-showbiz-viet-196260511232148677.htm",
 ]
 
 
@@ -47,16 +48,28 @@ async def crawl_article(url: str) -> dict:
     """
     from crawl4ai import AsyncWebCrawler
 
-    # TODO: Implement crawling logic
-    # async with AsyncWebCrawler() as crawler:
-    #     result = await crawler.arun(url=url)
-    #     return {
-    #         "url": url,
-    #         "title": result.metadata.get("title", "Unknown"),
-    #         "date_crawled": datetime.now().isoformat(),
-    #         "content_markdown": result.markdown,
-    #     }
-    raise NotImplementedError("Implement crawl_article")
+    async with AsyncWebCrawler() as crawler:
+        result = await crawler.arun(url=url)
+
+    metadata = getattr(result, "metadata", {}) or {}
+    title = metadata.get("title") or getattr(result, "title", None) or "Unknown"
+    content_markdown = (
+        getattr(result, "markdown", None)
+        or getattr(result, "cleaned_markdown", None)
+        or getattr(result, "text", None)
+        or ""
+    )
+
+    return {
+        "url": url,
+        "title": title,
+        "date_crawled": datetime.now().isoformat(),
+        "content_markdown": content_markdown,
+        "source_metadata": {
+            "site_name": metadata.get("site_name"),
+            "description": metadata.get("description"),
+        },
+    }
 
 
 async def crawl_all():
