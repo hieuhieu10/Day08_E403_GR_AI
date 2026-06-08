@@ -69,3 +69,6 @@ def generate_response(query: str, chunks: list, history: list, placeholder) -> s
         err_msg = f"Lỗi gọi LLM: {str(e)}"
         placeholder.markdown(err_msg)
         return err_msg
+    
+    
+    
