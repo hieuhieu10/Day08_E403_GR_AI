@@ -33,36 +33,64 @@ def convert_legal_docs():
     for filepath in legal_dir.iterdir():
         if filepath.suffix.lower() in (".pdf", ".docx", ".doc"):
             print(f"Converting: {filepath.name}")
-            # TODO: Convert và lưu file
-            # result = md.convert(str(filepath))
-            # output_path = output_dir / f"{filepath.stem}.md"
-            # output_path.write_text(result.text_content, encoding="utf-8")
-            # print(f"  ✓ Saved: {output_path}")
-            raise NotImplementedError("Implement convert_legal_docs")
+            try:
+                result = md.convert(str(filepath))
+
+                output_path = output_dir / f"{filepath.stem}.md"
+                output_path.write_text(
+                    result.text_content,
+                    encoding="utf-8",
+                )
+
+                print(f"  ✓ Saved: {output_path}")
+            except Exception as e:
+                print(f"  ✗ Error: {e}")
 
 
 def convert_news_articles():
-    """Convert JSON crawled articles trong data/landing/news/ sang markdown."""
+    """Convert JSON articles trong data/landing/news sang markdown."""
     news_dir = LANDING_DIR / "news"
     output_dir = OUTPUT_DIR / "news"
     output_dir.mkdir(parents=True, exist_ok=True)
 
     for filepath in news_dir.iterdir():
-        if filepath.suffix.lower() == ".json":
-            print(f"Converting: {filepath.name}")
-            # TODO: Đọc JSON, extract content_markdown, lưu thành .md
-            # data = json.loads(filepath.read_text(encoding="utf-8"))
-            # output_path = output_dir / f"{filepath.stem}.md"
-            #
-            # # Thêm metadata header
-            # header = f"# {data.get('title', 'Unknown')}\n\n"
-            # header += f"**Source:** {data.get('url', 'N/A')}\n"
-            # header += f"**Crawled:** {data.get('date_crawled', 'N/A')}\n\n---\n\n"
-            #
-            # content = header + data.get("content_markdown", "")
-            # output_path.write_text(content, encoding="utf-8")
-            # print(f"  ✓ Saved: {output_path}")
-            raise NotImplementedError("Implement convert_news_articles")
+        if filepath.suffix.lower() != ".json":
+            continue
+
+        print(f"Converting: {filepath.name}")
+
+        try:
+            data = json.loads(filepath.read_text(encoding="utf-8"))
+
+            title = data.get("title", "Unknown")
+            url = data.get("url", "N/A")
+            date_crawled = data.get("date_crawled", "N/A")
+
+            content_markdown = (
+                data.get("content_markdown")
+                or data.get("content")
+                or ""
+            )
+
+            markdown_content = (
+                f"# {title}\n\n"
+                f"**Source:** {url}\n\n"
+                f"**Crawled:** {date_crawled}\n\n"
+                f"---\n\n"
+                f"{content_markdown}"
+            )
+
+            output_path = output_dir / f"{filepath.stem}.md"
+            output_path.write_text(
+                markdown_content,
+                encoding="utf-8",
+            )
+
+            print(f"  ✓ Saved: {output_path}")
+
+        except Exception as e:
+            print(f"  ✗ Failed: {filepath.name}")
+            print(f"    {e}")
 
 
 def convert_all():

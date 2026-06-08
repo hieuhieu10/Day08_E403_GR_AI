@@ -26,52 +26,68 @@ def setup_directory():
 
 # TODO: Điền danh sách URL bài báo cần crawl
 ARTICLE_URLS = [
-    # Ví dụ:
-    # "https://vnexpress.net/...",
-    # "https://tuoitre.vn/...",
-    # "https://thanhnien.vn/...",
+    "https://vnexpress.net/anh-em-ca-si-chi-dan-ru-nhieu-nguoi-choi-ma-tuy-nhu-the-nao-4929804.html",
+    "https://vnexpress.net/ca-si-miu-le-bi-bat-voi-cao-buoc-to-chuc-su-dung-ma-tuy-5074769.html",
+    "https://vnexpress.net/dien-vien-hai-huu-tin-su-dung-ma-tuy-vi-to-mo-4599355.html",
+    "https://vnexpress.net/ca-si-chu-bin-bi-tam-giu-vi-lien-quan-ma-tuy-4755275.html",
+    "https://vnexpress.net/nguoi-mau-andrea-aybar-cung-tro-ly-lam-tiec-ma-tuy-trong-can-ho-cao-cap-5059429.html"
 ]
 
 
 async def crawl_article(url: str) -> dict:
-    """
-    Crawl một bài báo và trả về dict chứa metadata + content.
-
-    Returns:
-        {
-            "url": str,
-            "title": str,
-            "date_crawled": str (ISO format),
-            "content_markdown": str
-        }
-    """
     from crawl4ai import AsyncWebCrawler
 
-    # TODO: Implement crawling logic
-    # async with AsyncWebCrawler() as crawler:
-    #     result = await crawler.arun(url=url)
-    #     return {
-    #         "url": url,
-    #         "title": result.metadata.get("title", "Unknown"),
-    #         "date_crawled": datetime.now().isoformat(),
-    #         "content_markdown": result.markdown,
-    #     }
-    raise NotImplementedError("Implement crawl_article")
+    try:
+        async with AsyncWebCrawler() as crawler:
+            result = await crawler.arun(url=url)
+
+            if not result.success:
+                return {
+                    "url": url,
+                    "title": "FAILED",
+                    "date_crawled": datetime.now().isoformat(),
+                    "content_markdown": "",
+                    "error": result.error_message,
+                }
+
+            title = (
+                result.metadata.get("title", "Unknown")
+                if result.metadata
+                else "Unknown"
+            )
+
+            return {
+                "url": url,
+                "title": title,
+                "date_crawled": datetime.now().isoformat(),
+                "content_markdown": result.markdown or "",
+            }
+
+    except Exception as e:
+        return {
+            "url": url,
+            "title": "ERROR",
+            "date_crawled": datetime.now().isoformat(),
+            "content_markdown": "",
+            "error": str(e),
+        }
+
 
 
 async def crawl_all():
     """Crawl toàn bộ bài báo trong ARTICLE_URLS."""
     setup_directory()
 
-    for i, url in enumerate(ARTICLE_URLS, 1):
-        print(f"[{i}/{len(ARTICLE_URLS)}] Crawling: {url}")
-        article = await crawl_article(url)
+    articles = await asyncio.gather(*(crawl_article(url) for url in ARTICLE_URLS))
 
-        # Lưu file JSON
+    for i, article in enumerate(articles, 1):
         filename = f"article_{i:02d}.json"
         filepath = DATA_DIR / filename
-        filepath.write_text(json.dumps(article, ensure_ascii=False, indent=2))
-        print(f"  ✓ Saved: {filepath}")
+
+        filepath.write_text(
+            json.dumps(article, ensure_ascii=False, indent=2),
+            encoding="utf-8"
+        )
 
 
 if __name__ == "__main__":
